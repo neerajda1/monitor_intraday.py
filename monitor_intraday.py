@@ -15,7 +15,7 @@ cookies = dict(item.split("=",1) for item in COOKIE_STR.split("; "))
 session.cookies.update(cookies)  # persists cookies across requests :contentReference[oaicite:3]{index=3}
 
 # --- Fetch & parse top-9 list ---
-resp = session.get("https://yourdomain.com/dashboard")
+resp = session.get("https://tradefinder.in/market-pulse")
 soup = BeautifulSoup(resp.text, "html.parser")
 items = soup.select("#intraday-boost .stock-item")  # adjust selector :contentReference[oaicite:4]{index=4}
 current = [el.get_text(strip=True) for el in items][:9]
