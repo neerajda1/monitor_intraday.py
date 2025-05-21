@@ -1,0 +1,22 @@
+name: Intraday-Boost Monitor
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # runs every 5 minutes (UTC) :contentReference[oaicite:6]{index=6}
+jobs:
+  check_top9:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+      - name: Run monitor
+        env:
+          SITE_COOKIE: ${{ secrets.SITE_COOKIE }}
+          SMTP_USER:   ${{ secrets.SMTP_USER }}
+          SMTP_PASS:   ${{ secrets.SMTP_PASS }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+        run: python monitor_intraday.py
