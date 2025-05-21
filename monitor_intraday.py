@@ -1,49 +1,42 @@
-import os, json
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.common.by import By
+import os, json, requests
+from bs4 import BeautifulSoup
 import smtplib
 from email.message import EmailMessage
 
-# --- Configuration from GitHub Secrets ---
-USERNAME = os.getenv("LOGIN_USER")
-PASSWORD = os.getenv("LOGIN_PASS")
-SMTP_USER = os.getenv("SMTP_USER")
-SMTP_PASS = os.getenv("SMTP_PASS")
-RECIPIENT = os.getenv("ALERT_EMAIL")
+# --- Load secrets from environment ---
+COOKIE_STR = os.getenv("SITE_COOKIE")
+SMTP_USER  = os.getenv("SMTP_USER")
+SMTP_PASS  = os.getenv("SMTP_PASS")
+RECIPIENT  = os.getenv("ALERT_EMAIL")
 
-# --- Launch headless Chrome via webdriver-manager ---
-options = Options()
-options.add_argument("--headless=new")
-driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
+# --- Prepare session with your cookie ---
+session = requests.Session()
+cookies = dict(item.split("=",1) for item in COOKIE_STR.split("; "))
+session.cookies.update(cookies)  # persists cookies across requests :contentReference[oaicite:3]{index=3}
 
-# --- 1. Log in ---
-driver.get("https://yourdomain.com/login")
-driver.find_element(By.NAME, "username").send_keys(USERNAME)
-driver.find_element(By.NAME, "password").send_keys(PASSWORD)
-driver.find_element(By.CSS_SELECTOR, "button[type=submit]").click()
+# --- Fetch & parse top-9 list ---
+resp = session.get("https://yourdomain.com/dashboard")
+soup = BeautifulSoup(resp.text, "html.parser")
+items = soup.select("#intraday-boost .stock-item")  # adjust selector :contentReference[oaicite:4]{index=4}
+current = [el.get_text(strip=True) for el in items][:9]
 
-# --- 2. Scrape top-9 tickers ---
-driver.get("https://yourdomain.com/dashboard")
-els = driver.find_elements(By.CSS_SELECTOR, "#intraday-boost .stock-item")
-current = [e.text.strip() for e in els][:9]
-
-# --- 3. Load previous list ---
+# --- Load previous list ---
 try:
-    prev = json.load(open("top9_prev.json"))
+    previous = json.load(open("top9_prev.json"))
 except FileNotFoundError:
-    prev = []
+    previous = []
 
-# --- 4. Detect new entrants ---
-new = [t for t in current if t not in prev]
-if new:
+# --- Detect new entrants ---
+new_entries = [s for s in current if s not in previous]
+if new_entries:
     msg = EmailMessage()
-    msg["From"], msg["To"], msg["Subject"] = SMTP_USER, RECIPIENT, "🔔 New Intraday-Boost Stock"
-    msg.set_content("New entrant(s): " + ", ".join(new))
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
-        s.login(SMTP_USER, SMTP_PASS)
-        s.send_message(msg)
+    msg["From"]    = SMTP_USER
+    msg["To"]      = RECIPIENT
+    msg["Subject"] = "🔔 New Intraday-Boost Stock"
+    msg.set_content("New entrant(s): " + ", ".join(new_entries))
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+        smtp.login(SMTP_USER, SMTP_PASS)
+        smtp.send_message(msg)  # uses EmailMessage API :contentReference[oaicite:5]{index=5}
 
-# --- 5. Save for next run ---
+# --- Save current list for next run ---
 json.dump(current, open("top9_prev.json","w"))
